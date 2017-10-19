@@ -155,4 +155,19 @@ defmodule OPS.Web.MedicationRequestControllerTest do
       assert MedicationRequest.status(:completed) == resp["data"]["status"]
     end
   end
+
+  describe "create medication request" do
+    test "creates with valid data", %{conn: conn, data: [medication_request, _]} do
+      id = Ecto.UUID.generate()
+      mr =
+        medication_request
+        |> Map.put(:id, id)
+        |> Map.put(:request_number, id)
+      conn = post conn, medication_request_path(conn, :create), %{
+        "medication_request" => Map.from_struct(mr)
+      }
+      assert json_response(conn, 201)
+      assert json_response(conn, 201)["data"]["id"] == id
+    end
+  end
 end

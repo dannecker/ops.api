@@ -36,6 +36,12 @@ defmodule OPS.MedicationRequests do
     |> Repo.update_and_log(Map.get(attrs, "updated_by"))
   end
 
+  def create(%{"medication_request" => mr}) do
+    %MedicationRequest{}
+    |> changeset(mr)
+    |> Repo.insert()
+  end
+
   defp doctor_search(%Ecto.Changeset{valid?: true, changes: changes} = changeset) do
     employee_ids =
       changeset
