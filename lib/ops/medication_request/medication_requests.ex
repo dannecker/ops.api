@@ -9,6 +9,7 @@ defmodule OPS.MedicationRequests do
   alias OPS.MedicationRequest.DoctorSearch
   alias OPS.MedicationRequest.QualifySearch
   import Ecto.Changeset
+  alias Ecto.Multi
   use OPS.Search
 
   def list(params) do
@@ -28,6 +29,12 @@ defmodule OPS.MedicationRequests do
     %QualifySearch{}
     |> changeset(params)
     |> qualify_search()
+  end
+
+  def prequalify_list(params) do
+    %QualifySearch{}
+    |> changeset(params)
+    |> prequalify_search()
   end
 
   def update(medication_request, attrs) do
@@ -63,7 +70,17 @@ defmodule OPS.MedicationRequests do
   end
   defp doctor_search(changeset), do: {:error, changeset}
 
-  defp qualify_search(%Ecto.Changeset{valid?: true, changes: changes} = changeset) do
+  defp qualify_search(%Ecto.Changeset{valid?: true} = changeset) do
+     qualify_query(changeset, :qualify)
+  end
+  defp qualify_search(changeset), do: {:error, changeset}
+
+  defp prequalify_search(%Ecto.Changeset{valid?: true} = changeset) do
+    qualify_query(changeset, :prequalify)
+  end
+  defp prequalify_search(changeset), do: {:error, changeset}
+
+  def qualify_query(%Ecto.Changeset{valid?: true, changes: changes} = changeset, pre_or_qualify) do
     filters =
       changes
       |> Map.take(~w(person_id)a)
@@ -74,24 +91,27 @@ defmodule OPS.MedicationRequests do
       MedicationRequest.status(:active),
       MedicationRequest.status(:completed)
     ]
-
-    {:ok,
+    query =
       MedicationRequest
-      |> join(:left, [mr], md in MedicationDispense, md.medication_request_id == mr.id)
-      |> where([mr, md], ^filters)
-      |> where([mr, md], mr.status in ^medication_request_statuses)
-      |> where([mr, md], md.status == ^MedicationDispense.status(:processed))
-      |> where([mr, md], fragment("not (? > ? or ? < ?)",
+      |> where([mr], ^filters)
+      |> where([mr], mr.status in ^medication_request_statuses)
+      |> where([mr], fragment("not (? > ? or ? < ?)",
         ^started_at,
         mr.ended_at,
         ^ended_at,
         mr.started_at
       ))
-      |> select([mr, md], mr.medication_id)
-      |> Repo.all
-    }
+      |> select([mr], mr.medication_id)
+    case pre_or_qualify do
+      :qualify ->
+        query
+        |> join(:left, [mr], md in MedicationDispense, md.medication_request_id == mr.id)
+        |> where([mr, md], md.status == ^MedicationDispense.status(:processed))
+      :prequalify -> query
+    end
+
+    {:ok, Repo.all(query)}
   end
-  defp qualify_search(changeset), do: {:error, changeset}
 
   defp filter_by_employees(query, []), do: query
   defp filter_by_employees(query, employee_ids) do
@@ -119,5 +139,20 @@ defmodule OPS.MedicationRequests do
     |> cast(attrs, MedicationRequest.__schema__(:fields))
     |> put_change(:status, MedicationRequest.status(:active))
     |> put_change(:is_active, true)
+  end
+
+  def terminate do
+    query =
+      MedicationRequest
+      |> where([mr], mr.status == ^MedicationRequest.status(:active))
+      |> where([mr], mr.ended_at <= ^Date.utc_today())
+
+    Multi.new()
+    |> Multi.update_all(:medication_requests, query, set: [
+      status: MedicationRequest.status(:expired),
+      updated_by: Confex.fetch_env!(:ops, :system_user),
+      updated_at: NaiveDateTime.utc_now()
+    ])
+    |> Repo.transaction()
   end
 end

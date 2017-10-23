@@ -49,7 +49,8 @@ config :ops, OPS.BlockRepo,
 # General application configuration
 
 config :ops,
-  namespace: OPS
+  namespace: OPS,
+  system_user: {:system, "EHEALTH_SYSTEM_USER", "4261eacf-8008-4e62-899f-de1e2f7065f0"}
 
 config :ops, OPS.Scheduler,
   declaration_auto_approve: {:system, :string,
@@ -102,6 +103,17 @@ config :ops, OPS.MedicationDispense.Scheduler,
         OPS.MedicationDispenses,
         :terminate,
         [System.get_env("MEDICATION_DISPENSE_EXPIRATION") || 10]
+      }
+    },
+    {
+      {
+        :cron,
+        System.get_env("MEDICATION_REQUEST_SCHEDULE") || "* * * * *"
+      },
+      {
+        OPS.MedicationRequests,
+        :terminate,
+        []
       }
     },
     {

@@ -171,4 +171,43 @@ defmodule OPS.Web.MedicationRequestControllerTest do
       assert MedicationRequest.status(:active) == json_response(conn, 201)["data"]["status"]
     end
   end
+
+  describe "prequalify search medication requests" do
+    test "success search", %{conn: conn, data: [medication_request, _]} do
+      %{person_id: person_id, medication_id: medication_id} = medication_request
+      today = Date.utc_today()
+      conn = get conn, medication_request_path(conn, :prequalify_list, %{
+        "person_id" => person_id,
+        "started_at" => to_string(Date.add(today, -1)),
+        "ended_at" => to_string(Date.add(today, 1)),
+      })
+      resp = json_response(conn, 200)["data"]
+      assert [medication_id] == resp
+    end
+
+    test "empty search", %{conn: conn} do
+      today = to_string(Date.utc_today())
+      conn = get conn, medication_request_path(conn, :prequalify_list, %{
+        "person_id" => Ecto.UUID.generate(),
+        "started_at" => today,
+        "ended_at" => today,
+      })
+      resp = json_response(conn, 200)["data"]
+      assert [] == resp
+    end
+
+    test "empty request", %{conn: conn} do
+      conn = get conn, medication_request_path(conn, :prequalify_list)
+      assert json_response(conn, 422)
+    end
+
+    test "invalid dates request", %{conn: conn} do
+      conn = get conn, medication_request_path(conn, :prequalify_list, %{
+        "person_id" => Ecto.UUID.generate(),
+        "started_at" => "invalid",
+        "endded_at" => "invalid"
+      })
+      assert json_response(conn, 422)
+    end
+  end
 end

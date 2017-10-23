@@ -26,6 +26,12 @@ defmodule OPS.Web.MedicationRequestController do
     end
   end
 
+  def prequalify_list(conn, params) do
+    with {:ok, ids} <- MedicationRequests.prequalify_list(params) do
+      render(conn, "qualify_list.json", ids: ids)
+    end
+  end
+
   def create(conn, params) do
     with {:ok, medication_request} <- MedicationRequests.create(params)
     do
