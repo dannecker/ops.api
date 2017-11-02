@@ -88,9 +88,13 @@ defmodule OPS.Declarations do
       |> where([d], d.person_id == ^person_id)
       |> where([d], d.status in ^[Declaration.status(:active), Declaration.status(:pending)])
 
+    user_id = Map.get(declaration_params, "created_by")
+    updates = [status: Declaration.status(:terminated), updated_by: user_id, updated_at: DateTime.utc_now()]
+
     Multi.new()
-    |> Multi.update_all(:previous_declarations, query, set: [status: Declaration.status(:terminated)])
+    |> Multi.update_all(:previous_declarations, query, [set: updates], returning: [:id])
     |> Multi.insert(:new_declaration, declaration_changeset(%Declaration{}, declaration_params))
+    |> Multi.run(:logged_terminations, fn multi -> log_updates(user_id, multi.previous_declarations, updates) end)
     |> Repo.transaction()
   end
 
@@ -100,8 +104,12 @@ defmodule OPS.Declarations do
       |> where([d], fragment("?::date < now()::date", datetime_add(d.inserted_at, ^value, ^unit)))
       |> where([d], d.status == ^Declaration.status(:pending))
 
+    user_id = Confex.get_env(:ops, :declaration_terminator_user)
+    updates = [status: Declaration.status(:active), updated_by: user_id, updated_at: DateTime.utc_now()]
+
     Multi.new()
-    |> Multi.update_all(:declarations, query, set: [status: Declaration.status(:active)])
+    |> Multi.update_all(:declarations, query, [set: updates], returning: [:id])
+    |> Multi.run(:logged_declarations, fn multi -> log_updates(user_id, multi.declarations, updates) end)
     |> Repo.transaction()
   end
 
@@ -111,8 +119,12 @@ defmodule OPS.Declarations do
       |> where([d], fragment("?::date < now()::date", d.end_date))
       |> where([d], not d.status in ^[Declaration.status(:closed), Declaration.status(:terminated)])
 
+    user_id = Confex.get_env(:ops, :declaration_terminator_user)
+    updates = [status: Declaration.status(:closed), updated_by: user_id, updated_at: DateTime.utc_now()]
+
     Multi.new()
-    |> Multi.update_all(:declarations, query, set: [status: Declaration.status(:closed)])
+    |> Multi.update_all(:declarations, query, [set: updates], returning: [:id])
+    |> Multi.run(:logged_terminations, fn multi -> log_updates(user_id, multi.declarations, updates) end)
     |> Repo.transaction()
   end
   def terminate_declarations(user_id, employee_id) do
@@ -121,7 +133,7 @@ defmodule OPS.Declarations do
       |> where([d], d.status in ^[Declaration.status(:active), Declaration.status(:pending)])
       |> where([d], d.employee_id == ^employee_id)
 
-    updates = [status: Declaration.status(:terminated), updated_by: user_id]
+    updates = [status: Declaration.status(:terminated), updated_by: user_id, updated_at: DateTime.utc_now()]
 
     Multi.new
     |> Multi.update_all(:terminated_declarations, query, [set: updates], returning: [:id])
@@ -133,7 +145,7 @@ defmodule OPS.Declarations do
     query = from d in Declaration,
       where: [person_id: ^person_id]
 
-    updates = [status: "terminated", updated_by: user_id]
+    updates = [status: "terminated", updated_by: user_id, updated_at: DateTime.utc_now()]
 
     Multi.new
     |> Multi.update_all(:terminated_declarations, query, [set: updates], returning: [:id])
