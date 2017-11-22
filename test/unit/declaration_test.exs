@@ -1,5 +1,5 @@
 defmodule OPS.DeclarationTest do
-  use OPS.DataCase
+  use OPS.DataCase, async: false
 
   alias Scrivener.Page
   alias EctoTrail.Changelog
@@ -195,13 +195,16 @@ defmodule OPS.DeclarationTest do
       Enum.each [dec1, dec2, dec3], fn declaration ->
         declaration = Repo.get(Declaration, declaration.id)
 
-        assert "terminated" = declaration.status
-        assert ^user_id = declaration.updated_by
+        assert "terminated" == declaration.status
+        assert user_id == declaration.updated_by
 
-        assert %{
-          "status" => "terminated",
-          "updated_by" => ^user_id
-        } = Repo.get_by(Changelog, resource: "declaration", resource_id: declaration.id).changeset
+        audit_log = Repo.one!(
+          from cl in Changelog,
+          where: cl.resource == "declarations"
+                 and cl.resource_id == ^declaration.id
+                 and fragment("?->>?", cl.changeset, "status") == "terminated")
+
+        assert user_id == audit_log.changeset["updated_by"]
       end
     end
   end
@@ -211,7 +214,7 @@ defmodule OPS.DeclarationTest do
       user_id = Confex.fetch_env!(:ops, :system_user)
       person_id = "84e30a11-94bd-49fe-8b1f-f5511c5916d6"
 
-      # TODO: make statuses differennt. termination should pick up an terminate declarations
+      # TODO: make statuses different. termination should pick up an terminate declarations
       # in all statuses
       dec1 = fixture(:declaration)
       dec2 = fixture(:declaration, Map.merge(@create_attrs, %{"status" => "closed"}))
@@ -224,13 +227,16 @@ defmodule OPS.DeclarationTest do
       Enum.each [dec1, dec2, dec3], fn declaration ->
         declaration = Repo.get(Declaration, declaration.id)
 
-        assert "terminated" = declaration.status
-        assert ^user_id = declaration.updated_by
+        assert "terminated" == declaration.status
+        assert user_id == declaration.updated_by
 
-        assert %{
-          "status" => "terminated",
-          "updated_by" => ^user_id
-        } = Repo.get_by(Changelog, resource: "declaration", resource_id: declaration.id).changeset
+        audit_log = Repo.one!(
+          from cl in Changelog,
+          where: cl.resource == "declarations"
+                 and cl.resource_id == ^declaration.id
+                 and fragment("?->>?", cl.changeset, "status") == "terminated")
+
+        assert user_id == audit_log.changeset["updated_by"]
       end
     end
   end

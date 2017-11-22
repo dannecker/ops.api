@@ -181,12 +181,12 @@ defmodule OPS.Declarations do
       Enum.reduce terminated_declarations, [], fn declaration, acc ->
         AuditLogs.create_audit_log(%{
           actor_id: user_id,
-          resource: "declaration",
+          resource: "declarations",
           resource_id: declaration.id,
           changeset: changeset
         })
 
-        [declaration.id|acc]
+        [declaration.id | acc]
       end
 
     {:ok, updates}
