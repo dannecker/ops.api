@@ -1,5 +1,5 @@
 defmodule OPS.DeclarationTest do
-  use OPS.DataCase, async: false
+  use OPS.DataCase
 
   alias Scrivener.Page
   alias EctoTrail.Changelog
